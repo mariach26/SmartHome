@@ -1,0 +1,9 @@
+{
+	"folders": [
+		{
+			"name": "esp32Sensors2",
+			"path": "firmware/esp32Sensors2"
+		}
+	],
+	"settings": {}
+}
