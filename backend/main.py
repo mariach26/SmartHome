@@ -13,8 +13,12 @@ TOPIC = "esp32/sensors/data"
 
 # Εδώ θα αποθηκεύουμε προσωρινά τα τελευταία δεδομένα που έρχονται
 latest_data = {
-    "temperature": 0.0,
-    "humidity": 0.0,
+    "fire_alarm":False, # fire and shock sensors alarm
+    "shock_alarm":False,
+    "waterLeak":False,
+    "move":False,
+    #"temperature": 0.0,
+    #"humidity": 0.0,
     "device": "Waiting for data..."
 }
 
@@ -42,10 +46,12 @@ def on_message(client, userdata, msg):
     try:
         data = json.loads(payload)
         # Ενημερώνουμε τη μεταβλητή με τα νέα δεδομένα
-        latest_data["temperature"] = data.get("temperature", 0)
-        latest_data["humidity"] = data.get("humidity", 0)
-        latest_data["device"] = data.get("device", "Unknown")
-        print(f"📥 Νέα δεδομένα: {latest_data}")
+        #latest_data["temperature"] = data.get("temperature", 0)
+        #latest_data["humidity"] = data.get("humidity", 0)
+        #latest_data["device"] = data.get("device", "Unknown")
+        latest_data.update(data)
+        #print(f"📥 Νέα δεδομένα: {latest_data}")
+        print(f"ΕΝΗΜΕΡΩΣΗ: Φωτιά: {latest_data['fire_alarm']}, Εισβολή:{latest_data['shock_alarm']}, Διαρροή: {latest_data['waterLeak']}, Κίνηση:{latest_data['move']}")
     except json.JSONDecodeError:
         pass
 
