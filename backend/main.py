@@ -1,77 +1,67 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 import paho.mqtt.client as mqtt
-import ssl
 import json
+import time
 
-# --- ΡΥΘΜΙΣΕΙΣ HIVEMQ ---
-BROKER = "f1f3a9c62d2c4c4baff79aa00bdfdcde.s1.eu.hivemq.cloud"
-PORT = 8883
-USERNAME = "ntomata"
-PASSWORD = "Ntomata1"
-TOPIC = "esp32/sensors/data"
+# --- ΡΥΘΜΙΣΕΙΣ HIVEMQ CLOUD ---
+MQTT_SERVER = "f1f3a9c62d2c4c4baff79aa00bdfdcde.s1.eu.hivemq.cloud"
+MQTT_PORT = 8883
+MQTT_USER = "ntomata"
+MQTT_PASSWORD = "Ntomata1"
+MQTT_TOPIC = "esp32/sensors/data"
 
-# Εδώ θα αποθηκεύουμε προσωρινά τα τελευταία δεδομένα που έρχονται
-latest_data = {
-    "fire_alarm":False, # fire and shock sensors alarm
-    "shock_alarm":False,
-    "waterLeak":False,
-    "move":False,
-    #"temperature": 0.0,
-    #"humidity": 0.0,
-    "device": "Waiting for data..."
-}
+# Συναρτήση που εκτελείται όταν συνδεόμαστε στον Broker
+def on_connect(client, userdata, flags, rc):
+    if rc == 0:
+        print("✅ Connected to HiveMQ Cloud!")
+        # Κάνουμε subscribe στο topic που στέλνει το ESP32
+        client.subscribe(MQTT_TOPIC)
+        print(f"📡 Subscribed to topic: {MQTT_TOPIC}")
+    else:
+        print(f"❌ Connection failed with code {rc}")
 
-# --- ΡΥΘΜΙΣΗ FASTAPI ---
-app = FastAPI()
-
-# Προσθήκη CORS (Πολύ σημαντικό για να μην μπλοκάρει το React τις κλήσεις)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"], 
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# --- ΣΥΝΑΡΤΗΣΕΙΣ MQTT ---
-def on_connect(client, userdata, flags, reason_code, properties=None):
-    if reason_code == 0:
-        print("✅ Συνδέθηκε στο HiveMQ!")
-        client.subscribe(TOPIC)
-
+# Συναρτήση που εκτελείται όταν έρχεται νέο μήνυμα
 def on_message(client, userdata, msg):
-    global latest_data
-    payload = msg.payload.decode("utf-8")
     try:
-        data = json.loads(payload)
-        # Ενημερώνουμε τη μεταβλητή με τα νέα δεδομένα
-        #latest_data["temperature"] = data.get("temperature", 0)
-        #latest_data["humidity"] = data.get("humidity", 0)
-        #latest_data["device"] = data.get("device", "Unknown")
-        latest_data.update(data)
-        #print(f"📥 Νέα δεδομένα: {latest_data}")
-        print(f"ΕΝΗΜΕΡΩΣΗ: Φωτιά: {latest_data['fire_alarm']}, Εισβολή:{latest_data['shock_alarm']}, Διαρροή: {latest_data['waterLeak']}, Κίνηση:{latest_data['move']}")
-    except json.JSONDecodeError:
-        pass
+        # Μετατροπή του payload από bytes σε string και μετά σε JSON (dictionary)
+        data = json.loads(msg.payload.decode())
+        
+        print("\n--- New Data Received ---")
+        device = data.get("device", "Unknown")
+        water = data.get("water_percent", 0)
+        fire = "🔥 ALERT" if data.get("fire_alarm") else "Safe"
+        shock = "⚠️ SHOCK" if data.get("shock_alarm") else "Stable"
+        radar = "🚶 MOTION" if data.get("radar_alarm") else "Clear"
 
-# Ρύθμιση MQTT Client
-mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="FastAPI_Backend")
-mqtt_client.tls_set(tls_version=ssl.PROTOCOL_TLS_CLIENT)
-mqtt_client.username_pw_set(USERNAME, PASSWORD)
-mqtt_client.on_connect = on_connect
-mqtt_client.on_message = on_message
+        print(f"Device: {device}")
+        print(f"Water Level: {water}%")
+        print(f"Fire Status: {fire}")
+        print(f"Shock Status: {shock}")
+        print(f"Radar Status: {radar}")
+        
+        # Εδώ μπορείς να προσθέσεις κώδικα για αποθήκευση σε Database 
+        # ή αποστολή ειδοποίησης στο κινητό σου.
 
-# Ξεκινάμε το MQTT στο background (loop_start αντί για loop_forever)
-mqtt_client.connect(BROKER, PORT)
-mqtt_client.loop_start()
+    except Exception as e:
+        print(f"Error parsing JSON: {e}")
 
-# --- API ENDPOINTS ---
-@app.get("/")
-def read_root():
-    return {"message": "Το Backend λειτουργεί κανονικά!"}
+# Ρύθμιση του Client
+client = mqtt.Client()
 
-@app.get("/api/sensor-data")
-def get_sensor_data():
-    # Όταν το React ζητάει δεδομένα, του δίνουμε τα τελευταία που ήρθαν
-    return latest_data
+# Επειδή το HiveMQ χρησιμοποιεί TLS/SSL (θύρα 8883), ενεργοποιούμε το secure connection
+client.tls_set() 
+client.username_pw_set(MQTT_USER, MQTT_PASSWORD)
+
+# Ορισμός των callbacks
+client.on_connect = on_connect
+client.on_message = on_message
+
+# Σύνδεση
+print("Connecting to Broker...")
+try:
+    client.connect(MQTT_SERVER, MQTT_PORT, 60)
+except Exception as e:
+    print(f"Could not connect: {e}")
+    exit()
+
+# Ξεκινάει το loop που περιμένει μηνύματα για πάντα
+client.loop_forever()
