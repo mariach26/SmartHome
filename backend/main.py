@@ -1,67 +1,51 @@
 import paho.mqtt.client as mqtt
 import json
-import time
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+import uvicorn
+import threading
 
-# --- ΡΥΘΜΙΣΕΙΣ HIVEMQ CLOUD ---
-MQTT_SERVER = "f1f3a9c62d2c4c4baff79aa00bdfdcde.s1.eu.hivemq.cloud"
-MQTT_PORT = 8883
-MQTT_USER = "ntomata"
-MQTT_PASSWORD = "Ntomata1"
-MQTT_TOPIC = "esp32/sensors/data"
+app = FastAPI()
 
-# Συναρτήση που εκτελείται όταν συνδεόμαστε στον Broker
-def on_connect(client, userdata, flags, rc):
-    if rc == 0:
-        print("✅ Connected to HiveMQ Cloud!")
-        # Κάνουμε subscribe στο topic που στέλνει το ESP32
-        client.subscribe(MQTT_TOPIC)
-        print(f"📡 Subscribed to topic: {MQTT_TOPIC}")
-    else:
-        print(f"❌ Connection failed with code {rc}")
+# Επιτρέπουμε στο React να διαβάζει τα δεδομένα (CORS)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-# Συναρτήση που εκτελείται όταν έρχεται νέο μήνυμα
+# Εδώ αποθηκεύουμε την τελευταία κατάσταση των αισθητήρων
+latest_data = {
+    "water_pct": 0,
+    "fire_alert": False,
+    "shock_alert": False,
+    "radar_alert": False,
+    "device": "Waiting..."
+}
+
+# --- MQTT LOGIC ---
 def on_message(client, userdata, msg):
+    global latest_data
     try:
-        # Μετατροπή του payload από bytes σε string και μετά σε JSON (dictionary)
-        data = json.loads(msg.payload.decode())
-        
-        print("\n--- New Data Received ---")
-        device = data.get("device", "Unknown")
-        water = data.get("water_percent", 0)
-        fire = "🔥 ALERT" if data.get("fire_alarm") else "Safe"
-        shock = "⚠️ SHOCK" if data.get("shock_alarm") else "Stable"
-        radar = "🚶 MOTION" if data.get("radar_alarm") else "Clear"
-
-        print(f"Device: {device}")
-        print(f"Water Level: {water}%")
-        print(f"Fire Status: {fire}")
-        print(f"Shock Status: {shock}")
-        print(f"Radar Status: {radar}")
-        
-        # Εδώ μπορείς να προσθέσεις κώδικα για αποθήκευση σε Database 
-        # ή αποστολή ειδοποίησης στο κινητό σου.
-
+        latest_data = json.loads(msg.payload.decode())
     except Exception as e:
-        print(f"Error parsing JSON: {e}")
+        print(f"Error: {e}")
 
-# Ρύθμιση του Client
-client = mqtt.Client()
+mqtt_client = mqtt.Client()
+mqtt_client.tls_set()
+mqtt_client.username_pw_set("ntomata", "Ntomata1")
+mqtt_client.on_message = on_message
+mqtt_client.connect("f1f3a9c62d2c4c4baff79aa00bdfdcde.s1.eu.hivemq.cloud", 8883)
+mqtt_client.subscribe("esp32/sensors/data")
 
-# Επειδή το HiveMQ χρησιμοποιεί TLS/SSL (θύρα 8883), ενεργοποιούμε το secure connection
-client.tls_set() 
-client.username_pw_set(MQTT_USER, MQTT_PASSWORD)
+# Τρέχουμε το MQTT σε δικό του thread για να μην κολλάει το API
+threading.Thread(target=mqtt_client.loop_forever, daemon=True).start()
 
-# Ορισμός των callbacks
-client.on_connect = on_connect
-client.on_message = on_message
+# --- API ENDPOINT ---
+@app.get("/api/status")
+async def get_status():
+    return latest_data
 
-# Σύνδεση
-print("Connecting to Broker...")
-try:
-    client.connect(MQTT_SERVER, MQTT_PORT, 60)
-except Exception as e:
-    print(f"Could not connect: {e}")
-    exit()
-
-# Ξεκινάει το loop που περιμένει μηνύματα για πάντα
-client.loop_forever()
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
