@@ -15,7 +15,7 @@ const data = [
 function App() {
   const [hoveredData, setHoveredData] = useState(null);
   
-  // 1. ΤΟ STATE ΠΡΕΠΕΙ ΝΑ ΕΙΝΑΙ ΕΔΩ ΜΕΣΑ
+  // Το State για τους τρέχοντες αισθητήρες
   const [liveSensors, setLiveSensors] = useState({
     water_percent: 0,
     fire_alarm: false,
@@ -24,19 +24,87 @@ function App() {
     device: "Connecting..."
   });
 
-  // 2. FETCH ΑΠΟ ΤΟ PYTHON BACKEND (FastAPI)
+  // ΝΕΟ: Το State για το ιστορικό του γραφήματος
+  const [chartData, setChartData] = useState([]);
+
+  // Το FETCH που ενημερώνει και τους αισθητήρες ΚΑΙ το γράφημα
   const fetchSensors = async () => {
     try {
       const response = await fetch('http://localhost:8000/api/status');
       const data = await response.json();
+      
+      // 1. Ενημερώνουμε τις κάρτες
       setLiveSensors(data);
+
+      // 2. Βρίσκουμε ποιοι αισθητήρες χτυπάνε ΑΥΤΗ ΤΗ ΣΤΙΓΜΗ
+      let activeAlertsCount = 0;
+      let alertDetails = [];
+
+      if (data.fire_alarm) {
+        activeAlertsCount++;
+        alertDetails.push({ type: 'Φωτιά', room: 'ESP32' });
+      }
+      if (data.radar_alarm) {
+        activeAlertsCount++;
+        alertDetails.push({ type: 'Κίνηση', room: 'ESP32' });
+      }
+      if (data.shock_alarm) {
+        activeAlertsCount++;
+        alertDetails.push({ type: 'Κραδασμός', room: 'ESP32' });
+      }
+      if (data.water_percent > 10) {
+        activeAlertsCount++;
+        alertDetails.push({ type: `Νερό (${data.water_percent}%)`, room: 'ESP32' });
+      }
+
+      // 3. Παίρνουμε την ώρα σε λεπτά (π.χ. "14:35")
+      const now = new Date();
+      const timeString = now.toLocaleTimeString('el-GR', { hour: '2-digit', minute: '2-digit' });
+
+      // 4. Αποθηκεύουμε τα δεδομένα στο γράφημα
+      setChartData(prevData => {
+        if (prevData.length === 0) {
+          return [{ time: timeString, alerts: activeAlertsCount, details: alertDetails }];
+        }
+
+        const lastPoint = prevData[prevData.length - 1];
+
+        if (lastPoint.time === timeString) {
+          // Είμαστε στο ΙΔΙΟ λεπτό. Ενώνουμε τα παλιά με τα νέα!
+          const updatedData = [...prevData];
+          
+          // Βάζουμε στο ίδιο "τσουβάλι" ό,τι είχε χτυπήσει πριν σε αυτό το λεπτό, με ό,τι χτυπάει τώρα
+          const combinedDetails = [...lastPoint.details, ...alertDetails];
+          
+          // Κρατάμε μόνο τα μοναδικά (για να μη γράφει "Κίνηση, Κίνηση, Κίνηση" συνέχεια)
+          const uniqueDetails = combinedDetails.filter((obj, index, self) => 
+            index === self.findIndex((t) => t.type === obj.type)
+          );
+
+          updatedData[updatedData.length - 1] = {
+            time: timeString,
+            alerts: uniqueDetails.length, // Το σύνολο των ΔΙΑΦΟΡΕΤΙΚΩΝ αισθητήρων που χτύπησαν
+            details: uniqueDetails // Η τελική λίστα (π.χ. Φωτιά, Κίνηση, Νερό)
+          };
+          return updatedData;
+        } else {
+          // Άλλαξε το λεπτό (π.χ. πήγε 14:36), φτιάχνουμε νέο σημείο στο γράφημα
+          const newDataArray = [...prevData, { time: timeString, alerts: activeAlertsCount, details: alertDetails }];
+          
+          if (newDataArray.length > 15) {
+            newDataArray.shift(); // Κρατάμε τα τελευταία 15 λεπτά
+          }
+          return newDataArray;
+        }
+      });
+
     } catch (error) {
       console.error("Backend offline...", error);
     }
   };
 
   useEffect(() => {
-    const interval = setInterval(fetchSensors, 2000); // Ανανέωση κάθε 2 δευτερόλεπτα
+    const interval = setInterval(fetchSensors, 2000); 
     return () => clearInterval(interval);
   }, []);
 
@@ -68,36 +136,38 @@ function App() {
         </div>
 
         {/* ΚΑΡΤΑ ΝΕΡΟΥ */}
-        <div className="sensor-card">
+        <div className={`sensor-card ${liveSensors.water_percent > 5 ? 'critical-alert' : ''}`}>
           <FaTint className="icon water-icon" />
           <h3>Νερό</h3>
-          <span className="sensor-value">{liveSensors.water_percent}%</span>
+          <span className="sensor-value">
+            {liveSensors.water_percent > 10 ? `ALARM (${liveSensors.water_percent}%)` : `${liveSensors.water_percent}%`}
+          </span>
         </div>
 
         {/* ΚΑΡΤΑ ΚΙΝΗΣΗΣ */}
-        <div className="sensor-card">
+        <div className={`sensor-card ${liveSensors.radar_alarm ? 'critical-alert' : ''}`}>
           <FaWalking className="icon motion-icon" />
           <h3>Κίνηση</h3>
           <span className="sensor-value">
-            {liveSensors.radar_alert ? "⚠️ MOTION" : "No Motion"}
+            {liveSensors.radar_alarm ? "ALARM" : "Clear"}
           </span>
         </div>
 
         {/* ΚΑΡΤΑ ΚΡΑΔΑΣΜΟΥ */}
-        <div className="sensor-card">
+        <div className={`sensor-card ${liveSensors.shock_alarm ? 'critical-alert' : ''}`}>
           <FaVolumeUp className="icon sound-icon" />
           <h3>Κραδασμός</h3>
           <span className="sensor-value">
-            {liveSensors.shock_alarm ? "📳 SHOCK" : "Stable"}
+            {liveSensors.shock_alarm ? "ALARM" : "Stable"}
           </span>
         </div>
-      </div>
+        </div> 
 
       <div className="chart-section">
         <h2>Activity Monitor</h2>
         <div className="chart-container" onMouseLeave={() => setHoveredData(null)}>
           <ResponsiveContainer width="100%" height={250}>
-            <AreaChart data={data}>
+            <AreaChart data={chartData}>
               <defs>
                 <linearGradient id="colorAlerts" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#38bdf8" stopOpacity={0.8}/>
@@ -106,7 +176,11 @@ function App() {
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
               <XAxis dataKey="time" stroke="#94a3b8" />
-              <YAxis stroke="#94a3b8" />
+              <YAxis 
+  stroke="#94a3b8" 
+  domain={[0, 4]} 
+  allowDecimals={false} 
+/>
               <Tooltip content={<CustomTooltip />} /> 
               <Area 
                 type="monotone" 
