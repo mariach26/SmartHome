@@ -36,7 +36,7 @@ def send_my_email(subject,message):
     text=f"Subject: {subject}\n\n{message}".encode('utf-8')
     server= smtplib.SMTP("smtp.gmail.com", 587)
     server.starttls()
-    server.login(email, "")
+    server.login(email, "jrmf gkbt vckz wqqe")
     server.sendmail(email, receiver_email, text)
     server.quit()
     print("email has been sent to "+ receiver_email)
@@ -48,7 +48,6 @@ def on_message(client, userdata, msg):
     try:
         new_payload = json.loads(msg.payload.decode())
 
-        # Λεξικό για να μεταφράζουμε τα κλειδιά σε ωραία Ελληνικά
         sensor_names = {
             "water_pct": "Στάθμη Νερού (%)",
             "fire_alert": "Αισθητήρας Φωτιάς",
@@ -61,7 +60,7 @@ def on_message(client, userdata, msg):
         for key in new_payload:
             # Αν η τιμή είναι διαφορετική από την τελευταία αποθηκευμένη
             if key in latest_data and new_payload[key] != latest_data[key]:
-                # Παίρνουμε το ελληνικό όνομα αν υπάρχει, αλλιώς κρατάμε το αγγλικό κλειδί
+                # Παίρνουμε το ελληνικό όνομα αν υπάρχει, αλλιώς κρατάμε το αγγλικό
                 friendly_name = sensor_names.get(key, key)
                 
                 # Προσθήκη στη λίστα αλλαγών

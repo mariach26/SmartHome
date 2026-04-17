@@ -122,7 +122,7 @@ void loop() {
   unsigned long now = millis();
 
   // --- 1. ΣΥΝΕΧΗΣ ΕΛΕΓΧΟΣ ΚΡΑΔΑΣΜΟΥ ---
-  // Διαβάζει ασταμάτητα. Αν γίνει σεισμός/χτύπημα, το καταγράφει!
+  // Διαβάζει ασταμάτητα.
   if(digitalRead(SHOCK_PIN) == LOW) {
     shockDetected = true;
   }
@@ -181,7 +181,6 @@ void loop() {
     client.publish("esp32/sensors/data", jsonBuffer);
 
     // --- 4. ΕΠΑΝΑΦΟΡΑ ΣΤΙΓΜΙΑΙΩΝ ΣΥΝΑΓΕΡΜΩΝ ---
-    // Αφού στείλαμε το πακέτο, "ξεχνάμε" τα γεγονότα μέχρι την επόμενη φορά
     shockDetected = false; 
     radarDetected = false; 
   }

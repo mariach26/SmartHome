@@ -24,7 +24,7 @@ function App() {
     device: "Connecting..."
   });
 
-  // ΝΕΟ: Το State για το ιστορικό του γραφήματος
+  // Το State για το ιστορικό του γραφήματος
   const [chartData, setChartData] = useState([]);
 
   // Το FETCH που ενημερώνει και τους αισθητήρες ΚΑΙ το γράφημα
@@ -57,7 +57,7 @@ function App() {
         alertDetails.push({ type: `Νερό (${data.water_percent}%)`, room: 'ESP32' });
       }
 
-      // 3. Παίρνουμε την ώρα σε λεπτά (π.χ. "14:35")
+      // 3. Παίρνουμε την ώρα σε λεπτά 
       const now = new Date();
       const timeString = now.toLocaleTimeString('el-GR', { hour: '2-digit', minute: '2-digit' });
 
@@ -70,13 +70,13 @@ function App() {
         const lastPoint = prevData[prevData.length - 1];
 
         if (lastPoint.time === timeString) {
-          // Είμαστε στο ΙΔΙΟ λεπτό. Ενώνουμε τα παλιά με τα νέα!
+          // Είμαστε στο ΙΔΙΟ λεπτό,ενώνουμε παλια με νέα
           const updatedData = [...prevData];
           
-          // Βάζουμε στο ίδιο "τσουβάλι" ό,τι είχε χτυπήσει πριν σε αυτό το λεπτό, με ό,τι χτυπάει τώρα
+          // συγκεντρώνουμε τα προηγούμενα με τωρινά
           const combinedDetails = [...lastPoint.details, ...alertDetails];
           
-          // Κρατάμε μόνο τα μοναδικά (για να μη γράφει "Κίνηση, Κίνηση, Κίνηση" συνέχεια)
+          // Κρατάμε μόνο τα μοναδικά 
           const uniqueDetails = combinedDetails.filter((obj, index, self) => 
             index === self.findIndex((t) => t.type === obj.type)
           );
@@ -84,11 +84,11 @@ function App() {
           updatedData[updatedData.length - 1] = {
             time: timeString,
             alerts: uniqueDetails.length, // Το σύνολο των ΔΙΑΦΟΡΕΤΙΚΩΝ αισθητήρων που χτύπησαν
-            details: uniqueDetails // Η τελική λίστα (π.χ. Φωτιά, Κίνηση, Νερό)
+            details: uniqueDetails // Η τελική λίστα 
           };
           return updatedData;
         } else {
-          // Άλλαξε το λεπτό (π.χ. πήγε 14:36), φτιάχνουμε νέο σημείο στο γράφημα
+          // Άλλαξε το λεπτό, νέο σημείο στο γράφημα
           const newDataArray = [...prevData, { time: timeString, alerts: activeAlertsCount, details: alertDetails }];
           
           if (newDataArray.length > 15) {
